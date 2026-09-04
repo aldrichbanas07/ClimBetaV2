@@ -1,0 +1,15 @@
+# kilter-coach configuration
+
+board: kilter                          # boardlib board key (Aurora backend)
+layout_name: "Kilter Board Original"   # must match layouts.name in the Aurora sqlite db
+db_path: cache/kilter_db.sqlite3       # cached copy of the Aurora sqlite db (holes/placements/climbs)
+db_refresh_days: 7                     # re-download the db if the cached copy is older than this
+
+# contact detection tuning (see contact_detection.py) - these are starting points,
+# expect to retune per filming setup (camera distance, resolution, frame rate)
+contact_radius_px: 40
+dwell_frames: 5
+
+# coaching
+anthropic_api_key_env: ANTHROPIC_API_KEY
+anthropic_model: claude-sonnet-5

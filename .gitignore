@@ -1,0 +1,7 @@
+.venv/
+__pycache__/
+*.pyc
+cache/*.sqlite3
+cache/*.json
+!cache/.gitkeep
+.env

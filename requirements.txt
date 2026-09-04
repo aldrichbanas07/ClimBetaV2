@@ -1,0 +1,7 @@
+boardlib
+opencv-python
+mediapipe
+pandas
+numpy
+anthropic
+pyyaml
