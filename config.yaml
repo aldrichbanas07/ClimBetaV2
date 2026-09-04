@@ -10,6 +10,10 @@ db_refresh_days: 7                     # re-download the db if the cached copy i
 contact_radius_px: 40
 dwell_frames: 5
 
+# pose estimation (see pose.py)
+pose_model_variant: full   # lite | full | heavy - accuracy/speed tradeoff, see MediaPipe docs
+pose_model_path: cache/pose_landmarker_full.task
+
 # coaching
 anthropic_api_key_env: ANTHROPIC_API_KEY
 anthropic_model: claude-sonnet-5
