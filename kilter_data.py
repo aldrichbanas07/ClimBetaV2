@@ -28,6 +28,17 @@ import boardlib.db.aurora
 
 FRAME_TOKEN_RE = re.compile(r"p(\d+)r(\d+)")
 
+# Kilter Original (product_id=1) placement_roles - id, full_name, led_color.
+# Used only by build_manual_climb, as a fallback when the real database can't
+# be reached for a specific climb (e.g. it's newer than the cached snapshot
+# and the Aurora API is unreachable from this network).
+ROLE_META = {
+    "start": (12, "Start", "00FF00"),
+    "middle": (13, "Middle", "00FFFF"),
+    "finish": (14, "Finish", "FF00FF"),
+    "foot": (15, "Foot Only", "FFA500"),
+}
+
 
 def _db_is_stale(db_path, refresh_days):
     if not os.path.exists(db_path):
@@ -131,9 +142,12 @@ def fetch_climb(config, climb_uuid, angle_override=None, use_cache=True):
             x, y = hole_row
 
             role_row = connection.execute(
-                "SELECT name, full_name FROM placement_roles WHERE id = ?", (role_id,)
+                "SELECT name, full_name, led_color FROM placement_roles WHERE id = ?",
+                (role_id,),
             ).fetchone()
-            role_name, role_full_name = role_row if role_row else (None, None)
+            role_name, role_full_name, role_led_color = (
+                role_row if role_row else (None, None, None)
+            )
 
             placements.append(
                 {
@@ -144,6 +158,7 @@ def fetch_climb(config, climb_uuid, angle_override=None, use_cache=True):
                     "role_id": role_id,
                     "role": role_name,
                     "role_full_name": role_full_name,
+                    "role_led_color": role_led_color,
                 }
             )
 
@@ -156,6 +171,61 @@ def fetch_climb(config, climb_uuid, angle_override=None, use_cache=True):
             "placements": placements,
         }
 
+    os.makedirs(os.path.dirname(cache_path), exist_ok=True)
+    with open(cache_path, "w", encoding="utf-8") as f:
+        json.dump(climb, f, indent=2)
+
+    return climb
+
+
+def build_manual_climb(config, uuid, name, angle, holds):
+    """
+    Build (and cache) a climb dict by hand, in the same shape fetch_climb()
+    produces, from a manually transcribed hold list.
+
+    This is a fallback for when a climb can't be reached through the Aurora
+    database or live API (e.g. it's newer than the cached snapshot and the
+    network is blocking the live API) but its layout is known some other way
+    - e.g. read directly off a screenshot of the climb in the app, which
+    displays each used hold lit in its role's LED color (green=start,
+    cyan=middle, magenta=finish, orange/yellow=foot).
+
+    `holds` is a list of {"role": "start"|"middle"|"finish"|"foot", "x": int, "y": int}
+    dicts, in any convenient coordinate system (e.g. pixel position read off
+    a screenshot) - these are only used to order holds sensibly during
+    calibration, not for any real board geometry. hole_id values are assigned
+    sequentially per call and are only for identification within this climb;
+    they don't correspond to real Aurora hole_ids, and the placeholder hold
+    "type" they map to via hold_type_map.json is arbitrary here too.
+    """
+    placements = []
+    for i, hold in enumerate(holds):
+        role = hold["role"]
+        role_id, role_full_name, role_led_color = ROLE_META[role]
+        placements.append(
+            {
+                "hole_id": i + 1,
+                "placement_id": None,
+                "board_x": hold["x"],
+                "board_y": hold["y"],
+                "role_id": role_id,
+                "role": role,
+                "role_full_name": role_full_name,
+                "role_led_color": role_led_color,
+            }
+        )
+
+    climb = {
+        "uuid": uuid,
+        "name": name,
+        "angle": angle,
+        "layout_id": None,
+        "layout_name": config["layout_name"],
+        "placements": placements,
+        "source": "manual_transcription",
+    }
+
+    cache_path = os.path.join(os.path.dirname(config["db_path"]), f"{uuid}.json")
     os.makedirs(os.path.dirname(cache_path), exist_ok=True)
     with open(cache_path, "w", encoding="utf-8") as f:
         json.dump(climb, f, indent=2)

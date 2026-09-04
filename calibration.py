@@ -11,8 +11,13 @@ Workflow:
   1. Scrub through the video to pick one representative frame where all of
      the climb's used holds are visible (camera is assumed static for the
      whole attempt, so any frame works as long as holds aren't hidden by the
-     climber's body).
-  2. Click each hold, one at a time, in the order it's prompted.
+     climber's body). Kilter boards illuminate the holds used in a climb, so
+     a frame from just before the climber steps on (LEDs lit, body not yet
+     blocking anything) is usually the easiest to calibrate from.
+  2. Click each hold, one at a time, in the order it's prompted. Each prompt
+     shows the hold's actual LED color (from the board database) as a
+     swatch, to help you find the right physical hold when several are
+     close together.
   3. Save {hole_id: [pixel_x, pixel_y]} to cache/<video_name>_holds.json.
 """
 
@@ -22,6 +27,14 @@ import os
 import cv2
 
 ROLE_ORDER = {"start": 0, "middle": 1, "foot": 2, "finish": 3}
+
+
+def _hex_to_bgr(hex_color):
+    """Convert an 'RRGGBB' hex string (as stored in placement_roles.led_color) to a BGR tuple for cv2."""
+    if not hex_color or len(hex_color) != 6:
+        return (255, 255, 255)
+    r, g, b = (int(hex_color[i : i + 2], 16) for i in (0, 2, 4))
+    return (b, g, r)
 
 
 def _cache_path(video_path, cache_dir="cache"):
@@ -130,6 +143,10 @@ def label_holds(frame, placements):
         for hole_id, (x, y) in labeled.items():
             cv2.circle(display, (x, y), 6, (0, 255, 0), 2)
 
+        swatch_color = _hex_to_bgr(placement.get("role_led_color"))
+        cv2.circle(display, (20, 55), 12, swatch_color, -1)
+        cv2.circle(display, (20, 55), 12, (255, 255, 255), 1)
+
         cv2.putText(
             display,
             f"Click hole_id {placement['hole_id']} ({placement['role']})  "
@@ -137,6 +154,15 @@ def label_holds(frame, placements):
             (10, 30),
             cv2.FONT_HERSHEY_SIMPLEX,
             0.7,
+            (0, 0, 255),
+            2,
+        )
+        cv2.putText(
+            display,
+            "look for the hold lit this color",
+            (40, 60),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.6,
             (0, 0, 255),
             2,
         )
