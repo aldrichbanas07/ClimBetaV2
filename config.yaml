@@ -9,6 +9,7 @@ db_refresh_days: 7                     # re-download the db if the cached copy i
 # expect to retune per filming setup (camera distance, resolution, frame rate)
 contact_radius_px: 40
 dwell_frames: 5
+min_visibility: 0.5  # ignore pose landmarks below this MediaPipe visibility score (avoids extrapolated/occluded positions)
 
 # pose estimation (see pose.py)
 pose_model_variant: full   # lite | full | heavy - accuracy/speed tradeoff, see MediaPipe docs
