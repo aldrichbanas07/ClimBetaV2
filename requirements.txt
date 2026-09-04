@@ -1,5 +1,8 @@
 boardlib
-opencv-python
+# opencv-contrib-python (not opencv-python) - mediapipe depends on the contrib
+# build, and having both installed conflicts in the shared cv2 namespace and
+# can silently break the GUI (highgui) backend used for calibration's windows.
+opencv-contrib-python
 mediapipe
 pandas
 numpy

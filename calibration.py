@@ -25,8 +25,11 @@ import json
 import os
 
 import cv2
+import numpy as np
 
 ROLE_ORDER = {"start": 0, "middle": 1, "foot": 2, "finish": 3}
+MINIMAP_SIZE = 320
+MINIMAP_MARGIN = 24
 
 
 def _hex_to_bgr(hex_color):
@@ -115,6 +118,66 @@ def select_frame(video_path):
     return frame
 
 
+def _build_minimap(placements, target_hole_id, labeled_hole_ids, size=MINIMAP_SIZE):
+    """
+    Draw a schematic reference panel showing every hold's relative position
+    (from board_x/board_y), colored by role, with the current target hold
+    highlighted. This disambiguates holds that share a role/LED color (e.g.
+    several foot holds) by relative position in the pattern, without needing
+    a full board-to-video coordinate transform - it's just a proportional
+    scatter of the same coordinates already stored on each placement.
+    """
+    xs = [p["board_x"] for p in placements]
+    ys = [p["board_y"] for p in placements]
+    min_x, max_x = min(xs), max(xs)
+    min_y, max_y = min(ys), max(ys)
+    span_x = max(max_x - min_x, 1)
+    span_y = max(max_y - min_y, 1)
+
+    panel = np.full((size, size, 3), 30, dtype=np.uint8)
+    cv2.putText(
+        panel,
+        "reference layout (relative positions)",
+        (8, 18),
+        cv2.FONT_HERSHEY_SIMPLEX,
+        0.45,
+        (200, 200, 200),
+        1,
+    )
+
+    def to_panel_xy(board_x, board_y):
+        px = MINIMAP_MARGIN + (board_x - min_x) / span_x * (size - 2 * MINIMAP_MARGIN)
+        # invert y: board_y increases upward, image y increases downward
+        py = size - MINIMAP_MARGIN - (board_y - min_y) / span_y * (size - 2 * MINIMAP_MARGIN)
+        return int(px), int(py)
+
+    for p in placements:
+        px, py = to_panel_xy(p["board_x"], p["board_y"])
+        color = _hex_to_bgr(p.get("role_led_color"))
+        if p["hole_id"] == target_hole_id:
+            continue
+        radius = 9 if p["hole_id"] in labeled_hole_ids else 6
+        thickness = -1 if p["hole_id"] in labeled_hole_ids else 2
+        cv2.circle(panel, (px, py), radius, color, thickness)
+
+    target = next(p for p in placements if p["hole_id"] == target_hole_id)
+    tx, ty = to_panel_xy(target["board_x"], target["board_y"])
+    target_color = _hex_to_bgr(target.get("role_led_color"))
+    cv2.circle(panel, (tx, ty), 16, (255, 255, 255), 3)
+    cv2.circle(panel, (tx, ty), 10, target_color, -1)
+    cv2.putText(
+        panel,
+        "<- THIS ONE",
+        (min(tx + 20, size - 140), ty + 5),
+        cv2.FONT_HERSHEY_SIMPLEX,
+        0.55,
+        (255, 255, 255),
+        2,
+    )
+
+    return panel
+
+
 def label_holds(frame, placements):
     """
     Prompt the user to click each placement's hold, one at a time.
@@ -128,7 +191,9 @@ def label_holds(frame, placements):
     state = {"index": 0, "click": None}
 
     window = "Click each hold (u=undo, s=skip, q=quit)"
+    minimap_window = "Reference layout"
     cv2.namedWindow(window, cv2.WINDOW_NORMAL)
+    cv2.namedWindow(minimap_window, cv2.WINDOW_NORMAL)
 
     def on_mouse(event, x, y, flags, userdata):
         if event == cv2.EVENT_LBUTTONDOWN:
@@ -166,7 +231,10 @@ def label_holds(frame, placements):
             (0, 0, 255),
             2,
         )
+        minimap = _build_minimap(ordered, placement["hole_id"], set(labeled.keys()))
+
         cv2.imshow(window, display)
+        cv2.imshow(minimap_window, minimap)
         key = cv2.waitKey(20) & 0xFF
 
         if state["click"] is not None:
@@ -184,6 +252,7 @@ def label_holds(frame, placements):
             break
 
     cv2.destroyWindow(window)
+    cv2.destroyWindow(minimap_window)
     return labeled
 
 
@@ -207,3 +276,40 @@ def calibrate(video_path, climb, cache_dir="cache", force=False):
         json.dump({str(hole_id): list(xy) for hole_id, xy in labeled.items()}, f, indent=2)
 
     return labeled
+
+
+def _main():
+    import argparse
+    import json as _json
+
+    import yaml
+
+    import kilter_data
+
+    parser = argparse.ArgumentParser(description="Stand-alone calibration runner")
+    parser.add_argument("video_path", help="Path to the climb video")
+    parser.add_argument("climb_uuid", help="Climb uuid (cache/<uuid>.json must already exist)")
+    parser.add_argument("--config", default="config.yaml")
+    parser.add_argument("--force", action="store_true", help="Re-calibrate even if cached")
+    args = parser.parse_args()
+
+    with open(args.config, "r", encoding="utf-8") as f:
+        config = yaml.safe_load(f)
+
+    cache_path = os.path.join(os.path.dirname(config["db_path"]), f"{args.climb_uuid}.json")
+    with open(cache_path, "r", encoding="utf-8") as f:
+        climb = _json.load(f)
+
+    labeled = calibrate(
+        args.video_path,
+        climb,
+        cache_dir=os.path.dirname(config["db_path"]),
+        force=args.force,
+    )
+    print(f"Labeled {len(labeled)}/{len(climb['placements'])} holds:")
+    for hole_id, (x, y) in labeled.items():
+        print(f"  hole_id {hole_id}: ({x}, {y})")
+
+
+if __name__ == "__main__":
+    _main()
