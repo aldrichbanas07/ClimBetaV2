@@ -1,9 +1,9 @@
-# kilter-coach
+# ClimBeta
 
 Analyzes a climber's ascent of a specific Kilterboard climb from video,
 using the climb's known hold layout (fetched from the Kilter board
 database) instead of visual hold detection, and produces coaching feedback
-via a cloud LLM.
+and beta via a cloud LLM!!!!
 
 Target board: Kilter Original 12x12 layout. Assumes a static, fixed camera
 for the full duration of the recorded attempt - if the camera moves
@@ -13,7 +13,9 @@ mid-climb, this approach doesn't hold up.
 
 A rendered example showing detected hold contacts (bright ring = a limb
 currently touching that hold, labeled by limb name) over a real test climb:
-[`docs/demo/contacts_overlay.mp4`](docs/demo/contacts_overlay.mp4).
+
+
+https://github.com/user-attachments/assets/dda35a1b-40b6-467d-a6f9-b5e421dc4259
 
 ## Ground truth on the data
 
