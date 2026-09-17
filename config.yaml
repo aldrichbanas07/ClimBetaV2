@@ -21,4 +21,4 @@ pose_model_path: cache/pose_landmarker_full.task
 
 # coaching
 anthropic_api_key_env: ANTHROPIC_API_KEY
-anthropic_model: claude-sonnet-5
+anthropic_model: claude-opus-5
