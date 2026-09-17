@@ -36,7 +36,7 @@ a verified physical hold shape.
 | 3 | `calibration.py` - click-to-label calibration (hole -> pixel position in one video) | done |
 | 4 | `pose.py` - MediaPipe Pose extraction (wrist/ankle/toe) per frame | done |
 | 5 | `contact_detection.py` - match pose keypoints to calibrated holds into contact events | done |
-| 6 | `metrics.py` - movement smoothness metrics joined with contact events | not yet built |
+| 6 | `metrics.py` - movement smoothness metrics joined with contact events | done |
 | 7 | `coach.py` - structured coaching feedback via the Anthropic API | not yet built |
 | 8 | `main.py` - CLI entry point wiring steps 1-7 together | not yet built |
 
@@ -55,7 +55,7 @@ Config lives in `config.yaml`: board/layout selection, calibration
 tolerances (`contact_radius_px`, `dwell_frames`, `min_visibility`), the pose
 model variant, and the Anthropic API key's environment variable name.
 
-## Usage so far (steps 1-5, run standalone until `main.py` exists)
+## Usage so far (steps 1-6, run standalone until `main.py` exists)
 
 ```
 # 1+2: fetch a climb's layout (run once per climb; hold_type_map.json is one-time, project-wide)
@@ -70,6 +70,9 @@ python pose.py <video_path> [--visualize <output_mp4>]
 
 # 5: detect hold contacts
 python contact_detection.py <video_path> <climb_uuid> [--visualize <output_mp4>]
+
+# 6: compute movement metrics and join with contacts into one attempt summary
+python metrics.py <video_path> <climb_uuid>
 ```
 
 ### When a climb isn't in the cached database snapshot

@@ -11,6 +11,10 @@ contact_radius_px: 40
 dwell_frames: 5
 min_visibility: 0.5  # ignore pose landmarks below this MediaPipe visibility score (avoids extrapolated/occluded positions)
 
+# movement metrics (see metrics.py)
+velocity_window_frames: 15  # trailing window for the smoothness/consistency velocity ratio
+approach_window_frames: 10  # frames just before a contact's start, averaged into its "approach velocity"
+
 # pose estimation (see pose.py)
 pose_model_variant: full   # lite | full | heavy - accuracy/speed tradeoff, see MediaPipe docs
 pose_model_path: cache/pose_landmarker_full.task
