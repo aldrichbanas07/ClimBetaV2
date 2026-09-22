@@ -37,8 +37,62 @@ a verified physical hold shape.
 | 4 | `pose.py` - MediaPipe Pose extraction (wrist/ankle/toe) per frame | done |
 | 5 | `contact_detection.py` - match pose keypoints to calibrated holds into contact events | done |
 | 6 | `metrics.py` - movement smoothness metrics joined with contact events | done |
-| 7 | `coach.py` - structured coaching feedback via the Anthropic API | not yet built |
-| 8 | `main.py` - CLI entry point wiring steps 1-7 together | not yet built |
+| 6b | `moves.py` - segments the raw contact stream into discrete moves with body-position features | done |
+| 7 | `coach.py` - step-by-step coaching analysis via the Anthropic API | done |
+| 8 | `main.py` - CLI entry point wiring steps 1-7 together | done |
+
+## The move-by-move analysis
+
+The coaching output is a walkthrough: one entry per move, in order, each
+saying what happened, what the body-position numbers show, how the
+execution looked (`smooth` / `rushed` / `hesitant` / `fumbled` / `unclear`)
+and the numbers behind that rating - then overall strengths, issues and
+drills.
+
+That needed a segmentation layer (`moves.py`), because contact detection
+deliberately over-detects: on the test footage it produced **177 contact
+events for a 16-hold climb**, mostly 0.1-0.2s flybys plus the ankle and toe
+of the same foot each registering separately. `moves.py` collapses
+ankle+toe into one foot, merges re-contacts on the same hold into one
+occupancy (counting the gap as a regrip), drops flybys shorter than
+`min_hold_time_s`, and cuts the sequence at the finish hold so the climber
+dropping off the wall isn't analysed as climbing. 177 raw events becomes
+**34 moves**.
+
+The `execution` rating is an enum of observable movement qualities rather
+than a good/bad verdict, and the model has to cite the number behind each
+one. That's the honest version of "was this move bad": the data can show a
+move was abrupt, slow to commit, or regripped repeatedly - it cannot show
+that a different body position would have been better.
+
+## Usage
+
+```
+python main.py <video_path> <climb_uuid>
+```
+
+That's the whole pipeline. Each stage caches its output under `cache/` and is
+skipped when the cache file is there, so a second run is instant and free -
+useful because stage 7 is the only one that costs money.
+
+```
+--force <stage>   re-run this stage and everything after it (repeatable):
+                  climb | holds | pose | contacts | metrics | coach | all
+--no-coach        stop after the attempt summary - no API call, no cost
+```
+
+`--force` deliberately cascades downstream: a metrics file built on an old
+contact stream is worse than no cache at all, because it fails silently
+rather than loudly.
+
+Two things it writes beyond the stage caches: `cache/<video>_coaching.json`
+(the analysis, also printed) and `cache/<video>_frame_metrics.csv` (raw
+per-frame speed, trailing average, velocity ratio and cumulative distance
+for every tracked landmark - the numbers the summary is derived from).
+
+Stage 3 is interactive (it opens OpenCV windows for click-to-label
+calibration), so its cache is checked before any of the expensive stages
+start. Stage 7 needs `ANTHROPIC_API_KEY` set and credit on the account.
 
 ## Setup
 
@@ -55,7 +109,10 @@ Config lives in `config.yaml`: board/layout selection, calibration
 tolerances (`contact_radius_px`, `dwell_frames`, `min_visibility`), the pose
 model variant, and the Anthropic API key's environment variable name.
 
-## Usage so far (steps 1-6, run standalone until `main.py` exists)
+## Running the stages standalone
+
+`main.py` covers the normal path; each stage is also runnable on its own, for
+inspecting or re-doing one piece without the others.
 
 ```
 # 1+2: fetch a climb's layout (run once per climb; hold_type_map.json is one-time, project-wide)
@@ -71,9 +128,21 @@ python pose.py <video_path> [--visualize <output_mp4>]
 # 5: detect hold contacts
 python contact_detection.py <video_path> <climb_uuid> [--visualize <output_mp4>]
 
-# 6: compute movement metrics and join with contacts into one attempt summary
+# 6 (+6b): movement metrics, move segmentation and body-position features,
+#          all written into one attempt summary
 python metrics.py <video_path> <climb_uuid>
+
+# 6b alone, to inspect just the move segmentation
+python moves.py <video_path>
+
+# 7: step-by-step coaching analysis (needs ANTHROPIC_API_KEY and API credit)
+python coach.py <video_path>
 ```
+
+Changing the tracked pose landmarks (`pose.py`) invalidates the cached
+`cache/<video_name>_pose.csv` - re-run step 4 before steps 5-7, or the
+body-position features come back null. `main.py` detects this case and
+re-extracts automatically; running the stages by hand does not.
 
 ### When a climb isn't in the cached database snapshot
 

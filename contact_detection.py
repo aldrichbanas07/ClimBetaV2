@@ -17,6 +17,7 @@ import pandas as pd
 
 from calibration import _hex_to_bgr
 from hold_type_map import PLACEHOLDER_TYPES
+from pose import CONTACT_LANDMARKS
 
 
 def _load_hold_type_map(path="hold_type_map.json"):
@@ -47,7 +48,10 @@ def detect_contacts(pose_df, calibrated_holds, climb, hold_type_map, config):
     hole_ids = list(calibrated_holds.keys())
     hole_xy = np.array([calibrated_holds[h] for h in hole_ids], dtype=float)
 
-    df = pose_df[pose_df["visibility"] >= min_visibility].copy()
+    df = pose_df[
+        (pose_df["visibility"] >= min_visibility)
+        & (pose_df["landmark"].isin(CONTACT_LANDMARKS))
+    ].copy()
     if df.empty or not hole_ids:
         return []
 

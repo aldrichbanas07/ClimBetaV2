@@ -31,13 +31,32 @@ MODEL_URLS = {
 
 # name -> mediapipe.tasks.python.vision.PoseLandmark member name
 TRACKED_LANDMARKS = {
+    # contact limbs - the ones matched against holds
     "left_wrist": "LEFT_WRIST",
     "right_wrist": "RIGHT_WRIST",
     "left_ankle": "LEFT_ANKLE",
     "right_ankle": "RIGHT_ANKLE",
     "left_toe": "LEFT_FOOT_INDEX",
     "right_toe": "RIGHT_FOOT_INDEX",
+    # torso - never matched against holds, used only to describe body
+    # position during a move (hip travel, reach extension), see moves.py
+    "left_shoulder": "LEFT_SHOULDER",
+    "right_shoulder": "RIGHT_SHOULDER",
+    "left_hip": "LEFT_HIP",
+    "right_hip": "RIGHT_HIP",
 }
+
+# Only these may produce hold-contact events. The torso landmarks above are
+# tracked for body-position context and would otherwise generate nonsense
+# contacts (a hip drifting within contact_radius_px of a hold).
+CONTACT_LANDMARKS = (
+    "left_wrist",
+    "right_wrist",
+    "left_ankle",
+    "right_ankle",
+    "left_toe",
+    "right_toe",
+)
 
 
 def ensure_pose_model(config):
@@ -135,6 +154,10 @@ LANDMARK_COLORS_BGR = {
     "right_ankle": (255, 128, 0),
     "left_toe": (0, 255, 255),
     "right_toe": (0, 255, 0),
+    "left_shoulder": (200, 200, 200),
+    "right_shoulder": (160, 160, 160),
+    "left_hip": (255, 0, 255),
+    "right_hip": (200, 0, 200),
 }
 
 

@@ -73,12 +73,19 @@ def _approach_velocity(metrics_df, limb, start_frame, window):
     return None if pd.isna(value) else float(value)
 
 
-def build_attempt_summary(pose_df, contacts, climb, config):
+def build_attempt_summary(pose_df, contacts, climb, config, calibrated_holds=None):
     """
     Returns one compact JSON-serializable dict summarizing the whole
     attempt: climb metadata, overall movement smoothness/consistency by
     limb, and every contact event enriched with its approach velocity and
     dwell time in seconds.
+
+    When `calibrated_holds` is supplied, the raw contact stream is also
+    segmented into a move-by-move sequence with per-move body-position
+    features (see moves.py) - that sequence is what drives the step-by-step
+    coaching analysis, and the raw `contacts` list is dropped from the
+    summary in that case, since it is mostly detector noise and would only
+    invite the model to narrate flybys as if they were moves.
     """
     metrics_df = compute_frame_metrics(pose_df, config)
     approach_window = config.get("approach_window_frames", 10)
@@ -112,7 +119,7 @@ def build_attempt_summary(pose_df, contacts, climb, config):
             }
         )
 
-    return {
+    summary = {
         "climb": {
             "uuid": climb["uuid"],
             "name": climb["name"],
@@ -123,8 +130,27 @@ def build_attempt_summary(pose_df, contacts, climb, config):
             "estimated_fps": fps,
         },
         "movement_smoothness_by_limb": by_limb,
-        "contacts": enriched_contacts,
     }
+
+    if calibrated_holds is not None:
+        # Imported here rather than at module level: moves.py imports
+        # compute_frame_metrics from this module.
+        import moves as moves_module
+
+        move_sequence, clean_contacts = moves_module.build_move_sequence(
+            pose_df, contacts, calibrated_holds, config, fps
+        )
+        summary["measurement_caveats"] = moves_module.MEASUREMENT_CAVEATS
+        summary["moves"] = move_sequence
+        summary["move_counts"] = {
+            "raw_contact_events": len(contacts),
+            "held_positions_after_cleaning": len(clean_contacts),
+            "moves": len(move_sequence),
+        }
+    else:
+        summary["contacts"] = enriched_contacts
+
+    return summary
 
 
 def _main():
@@ -153,7 +179,10 @@ def _main():
     with open(os.path.join(cache_dir, f"{args.climb_uuid}.json"), "r", encoding="utf-8") as f:
         climb = json.load(f)
 
-    summary = build_attempt_summary(pose_df, contacts, climb, config)
+    with open(os.path.join(cache_dir, f"{video_name}_holds.json"), "r", encoding="utf-8") as f:
+        calibrated_holds = {int(k): tuple(v) for k, v in json.load(f).items()}
+
+    summary = build_attempt_summary(pose_df, contacts, climb, config, calibrated_holds)
 
     out_path = args.out or os.path.join(cache_dir, f"{video_name}_metrics.json")
     with open(out_path, "w", encoding="utf-8") as f:
@@ -166,7 +195,12 @@ def _main():
         ratio = stats["mean_velocity_ratio"]
         ratio_str = f"{ratio:.2f}" if ratio is not None else "n/a"
         print(f"    {limb:<12} mean_ratio={ratio_str}  total_distance_px={stats['total_distance_px']:.0f}")
-    print(f"  {len(summary['contacts'])} contacts enriched with approach velocity + dwell time")
+    counts = summary["move_counts"]
+    print(
+        f"  {counts['raw_contact_events']} raw contact events -> "
+        f"{counts['held_positions_after_cleaning']} held positions -> "
+        f"{counts['moves']} moves"
+    )
 
 
 if __name__ == "__main__":

@@ -11,6 +11,12 @@ contact_radius_px: 40
 dwell_frames: 5
 min_visibility: 0.5  # ignore pose landmarks below this MediaPipe visibility score (avoids extrapolated/occluded positions)
 
+# move segmentation (see moves.py) - cleans the deliberately over-eager raw
+# contact stream into the holds a limb genuinely occupied
+merge_gap_frames: 8     # re-contacts on the same hold within this many frames are one occupancy (the gap counts as a regrip)
+min_hold_time_s: 0.25   # shorter occupancies are treated as flybys, not held positions
+truncate_after_finish: true  # drop everything after the finish hold is reached (the climber coming off the wall isn't climbing)
+
 # movement metrics (see metrics.py)
 velocity_window_frames: 15  # trailing window for the smoothness/consistency velocity ratio
 approach_window_frames: 10  # frames just before a contact's start, averaged into its "approach velocity"
@@ -22,3 +28,4 @@ pose_model_path: cache/pose_landmarker_full.task
 # coaching
 anthropic_api_key_env: ANTHROPIC_API_KEY
 anthropic_model: claude-opus-5
+anthropic_max_tokens: 16000   # the step-by-step analysis is one entry per move, so this scales with move count
